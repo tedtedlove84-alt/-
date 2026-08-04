@@ -23,7 +23,12 @@ function renderMonth(){
     const r=reservationOn(day),cell=document.createElement('button');cell.className='day';cell.type='button';
     if(r)cell.classList.add('booked');if(blocked[day])cell.classList.add('blocked-day');
     let content=`<time>${day}</time>`;
-    if(r){const start=r.start===day;content+=`<div class="stay ${start?'start':''}">${start?`<b>${r.name}</b><span>${r.guests}인 · ${r.end-r.start}박</span>`:'<span>예약 중</span>'}</div>`}
+    if(r){
+      const segmentStart=r.start===day||day%7===2;
+      const segmentEnd=r.end-1===day||day%7===1;
+      const label=r.start===day||day%7===2;
+      content+=`<div class="stay ${segmentStart?'segment-start':''} ${segmentEnd?'segment-end':''}">${label?`<b>${r.name}</b><span>${r.guests}인 · ${r.end-r.start}박</span>`:'<span aria-hidden="true">&nbsp;</span>'}</div>`
+    }
     if(blocked[day])content+=`<div class="block-label">— ${blocked[day]}</div>`;
     if(cleaners[day])content+=`<div class="clean-label">⌁ 청소 · ${cleaners[day]}</div>`;
     if(!r&&!blocked[day])content+=`<div class="price">₩${[5,6].includes((day+6)%7)?'16.5':'11.9'}만</div>`;
@@ -67,3 +72,39 @@ const file=document.getElementById('csvFile');file.addEventListener('change',asy
 document.getElementById('csvButton').addEventListener('click',()=>{const result=analyzeCsv(document.getElementById('csvText').value);const box=document.getElementById('csvResult');if(!result){box.textContent='읽을 수 있는 CSV 또는 표 내용을 넣어 주세요.';return}box.innerHTML=`<b>${result.rows}개 거래행 분석</b> · 고유 예약 ${result.codes}건 · 예약 ${result.types['예약']||0}행 · Payout ${result.types.Payout||0}행`;toast('정산자료를 분석했습니다.')});
 document.getElementById('addChange').addEventListener('click',()=>toast('변경 기록 입력 화면은 다음 테스트에서 연결합니다.'));
 document.getElementById('logCause').addEventListener('click',()=>toast('7월 26일 변경 기록을 추가할 수 있도록 표시했습니다.'));
+
+const baseProfit=1757504;
+let extraExpenses=JSON.parse(localStorage.getItem('andwith-extra-expenses')||'[]');
+const won=value=>`${Math.round(value).toLocaleString('ko-KR')}원`;
+function renderExpenses(){
+  const total=extraExpenses.reduce((sum,item)=>sum+Number(item.amount||0),0);
+  document.getElementById('extraExpenseRows').innerHTML=extraExpenses.map((item,index)=>`<div class="minus custom-expense"><span>${item.name}<small>${item.note||'추가 입력'}</small></span><b>−${won(item.amount)}</b><button type="button" data-remove-expense="${index}" aria-label="${item.name} 삭제">×</button></div>`).join('');
+  const profit=baseProfit-total;
+  document.getElementById('profitTotal').textContent=won(profit);
+  document.getElementById('profitMetric').innerHTML=`${Math.round(profit).toLocaleString('ko-KR')}<small>원</small>`;
+  document.querySelectorAll('[data-remove-expense]').forEach(button=>button.addEventListener('click',()=>{extraExpenses.splice(Number(button.dataset.removeExpense),1);localStorage.setItem('andwith-extra-expenses',JSON.stringify(extraExpenses));renderExpenses()}));
+}
+document.getElementById('expenseForm').addEventListener('submit',event=>{
+  event.preventDefault();const data=new FormData(event.currentTarget);
+  extraExpenses.push({name:data.get('name'),amount:Number(data.get('amount')),note:data.get('note')});
+  localStorage.setItem('andwith-extra-expenses',JSON.stringify(extraExpenses));renderExpenses();event.currentTarget.reset();document.getElementById('expenseDialog').close();toast('추가 비용을 운영이익에 반영했습니다.')
+});
+renderExpenses();
+
+const dailyViews=[128,97,123,114,101,94,110,136,119,115,158,186,202,170,109,105,108,103,114,129,134,152,159,136,102,242,143,150,142,120,125];
+const dailyBookings=[2,0,2,0,0,0,0,2,0,0,1,3,3,1,0,0,0,0,0,1,1,1,1,0,0,1,1,3,1,0,1];
+function renderViewsChart(){
+  const svg=document.getElementById('viewsChart'),max=280,width=1000,height=210,step=width/(dailyViews.length-1);
+  const points=dailyViews.map((value,index)=>({x:index*step,y:height-(value/max*height),value,day:index+1}));
+  const line=points.map(point=>`${point.x},${point.y}`).join(' '),area=`0,${height} ${line} ${width},${height}`;
+  svg.innerHTML=`<defs><linearGradient id="viewArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4b4b4b" stop-opacity=".22"/><stop offset="1" stop-color="#4b4b4b" stop-opacity=".02"/></linearGradient></defs><polygon points="${area}" fill="url(#viewArea)"/><polyline points="${line}" fill="none" stroke="#3f3f3f" stroke-width="3" vector-effect="non-scaling-stroke"/>${points.map(point=>`<circle tabindex="0" role="button" aria-label="7월 ${point.day}일 조회 ${point.value}회" data-chart-day="${point.day}" cx="${point.x}" cy="${point.y}" r="6"><title>7월 ${point.day}일 · 조회 ${point.value}회</title></circle>`).join('')}`;
+  svg.querySelectorAll('[data-chart-day]').forEach(point=>{const select=()=>showChartDay(Number(point.dataset.chartDay));point.addEventListener('click',select);point.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ')select()})});
+  showChartDay(26)
+}
+function showChartDay(day){
+  document.querySelectorAll('[data-chart-day]').forEach(point=>point.classList.toggle('selected',Number(point.dataset.chartDay)===day));
+  const changes={12:'평일 가격 조정',13:'최소숙박 변경',26:'기록 없음'};
+  document.getElementById('chartDetail').innerHTML=`<div><span>선택일</span><b>7월 ${day}일</b></div><div><span>조회수</span><b>${dailyViews[day-1]}회</b></div><div><span>새 예약</span><b>${dailyBookings[day-1]}건</b></div><div><span>운영 변경</span><b>${changes[day]||'없음'}</b></div><button id="logCause">변경 기록 추가</button>`;
+  document.getElementById('logCause').addEventListener('click',()=>toast(`7월 ${day}일 변경 기록 입력을 준비했습니다.`))
+}
+renderViewsChart();
