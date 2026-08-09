@@ -5,19 +5,24 @@ const reservations=[
 const blocked={5:'보수·휴식',18:'보수·휴식'};
 const cleaners={3:'미배정',4:'난희',5:'난희',10:'외주',13:'외주',18:'외주',24:'외주',26:'외주',30:'외주'};
 const views=[...document.querySelectorAll('.view')];
-let properties=JSON.parse(localStorage.getItem('andwith-properties')||'null')||[{id:'and',name:'앤드',area:'서울 마포구 망원동',color:'#315f50'}];
+const defaultProperties=[{id:'and',name:'앤드',area:'서울 마포구 망원동',color:'#315f50'},{id:'with',name:'위드',area:'두 번째 숙소 예시',color:'#d49a22'}];
+let properties=JSON.parse(localStorage.getItem('andwith-properties')||'null')||defaultProperties;
 let activePropertyId=localStorage.getItem('andwith-active-property')||'and';
 const activeProperty=()=>properties.find(property=>property.id===activePropertyId)||properties[0];
+const isPortfolio=()=>activePropertyId==='all';
 const escapeHtml=value=>String(value).replace(/[&<>'"]/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
 
 function renderPropertyMenu(){
-  const property=activeProperty();
+  const portfolio=isPortfolio(),property=portfolio?{name:'전체 숙소',color:'#4f4f4f'}:activeProperty();
   document.querySelectorAll('[data-property-name]').forEach(element=>element.textContent=property.name);
   document.documentElement.style.setProperty('--property-color',property.color);
   const menu=document.getElementById('propertyMenu');
-  menu.innerHTML=properties.map(item=>`<button type="button" data-property-id="${escapeHtml(item.id)}"><i style="background:${item.color}"></i><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.area)}</small></span>${item.id===property.id?'<em>선택됨</em>':''}</button>`).join('')+'<button type="button" class="add-property">＋ 새 숙소 등록</button>';
-  menu.querySelectorAll('[data-property-id]').forEach(button=>button.addEventListener('click',()=>{activePropertyId=button.dataset.propertyId;localStorage.setItem('andwith-active-property',activePropertyId);menu.hidden=true;renderPropertyMenu();toast(`${activeProperty().name} 숙소로 전환했습니다.`)}));
+  menu.innerHTML=`<button type="button" data-property-id="all" class="portfolio-option"><i></i><span><b>전체 숙소</b><small>${properties.length}개 숙소 통합 달력</small></span>${portfolio?'<em>선택됨</em>':''}</button>`+properties.map(item=>`<button type="button" data-property-id="${escapeHtml(item.id)}"><i style="background:${item.color}"></i><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.area)}</small></span>${!portfolio&&item.id===property.id?'<em>선택됨</em>':''}</button>`).join('')+'<button type="button" class="add-property">＋ 새 숙소 등록</button>';
+  menu.querySelectorAll('[data-property-id]').forEach(button=>button.addEventListener('click',()=>{activePropertyId=button.dataset.propertyId;localStorage.setItem('andwith-active-property',activePropertyId);menu.hidden=true;renderPropertyMenu();if(isPortfolio())showView('calendar');toast(isPortfolio()?'전체 숙소 통합 달력을 열었습니다.':`${activeProperty().name} 숙소로 전환했습니다.`)}));
   menu.querySelector('.add-property').addEventListener('click',()=>{menu.hidden=true;document.getElementById('propertyDialog').showModal()})
+  document.getElementById('singleCalendarPanel').hidden=portfolio;
+  document.getElementById('portfolioCalendarPanel').hidden=!portfolio;
+  renderPortfolioCalendar();
 }
 
 function showView(id){
@@ -31,7 +36,6 @@ document.querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',(
 document.getElementById('propertyButton').addEventListener('click',event=>{event.stopPropagation();const menu=document.getElementById('propertyMenu');menu.hidden=!menu.hidden});
 document.addEventListener('click',event=>{if(!event.target.closest('.property-switch'))document.getElementById('propertyMenu').hidden=true});
 document.getElementById('propertyForm').addEventListener('submit',event=>{event.preventDefault();const data=new FormData(event.currentTarget),property={id:`property-${Date.now()}`,name:data.get('name'),area:data.get('area'),color:data.get('color')};properties.push(property);activePropertyId=property.id;localStorage.setItem('andwith-properties',JSON.stringify(properties));localStorage.setItem('andwith-active-property',activePropertyId);renderPropertyMenu();event.currentTarget.reset();document.getElementById('propertyDialog').close();toast(`${property.name} 숙소를 등록했습니다.`)});
-renderPropertyMenu();
 
 function reservationOn(day){return reservations.find(r=>day>=r.start&&day<r.end)}
 function renderMonth(){
@@ -58,6 +62,20 @@ function renderWeek(){
   for(let day=1;day<=7;day++){const r=reservationOn(day);root.insertAdjacentHTML('beforeend',`<div class="week-day ${r?'booked':''} ${blocked[day]?'blocked-day':''}"><span>${['토','일','월','화','수','목','금'][day-1]}</span><b>${day}</b>${r?`<small>${r.name}<br>${r.guests}인</small>`:blocked[day]?'<small>운영 차단</small>':'<small>₩11.9만</small>'}</div>`)}
 }
 renderMonth();renderWeek();
+
+const portfolioStays={
+  and:[{start:1,end:2,guests:2},{start:2,end:3,guests:2},{start:3,end:4,guests:2},{start:4,end:5,guests:2},{start:6,end:10,guests:3},{start:10,end:13,guests:3},{start:13,end:18,guests:2},{start:20,end:24,guests:2},{start:24,end:26,guests:3},{start:27,end:30,guests:2}],
+  with:[{start:2,end:5,guests:2},{start:7,end:11,guests:4},{start:12,end:15,guests:3},{start:17,end:20,guests:2},{start:21,end:26,guests:4},{start:28,end:31,guests:3}]
+};
+function renderPortfolioCalendar(){
+  const root=document.getElementById('portfolioCalendar'),legend=document.getElementById('portfolioLegend');if(!root||!legend)return;
+  legend.innerHTML=properties.map(property=>`<span><i style="background:${property.color}"></i>${escapeHtml(property.name)}</span>`).join('');
+  const header=`<div class="portfolio-row portfolio-dates"><b>숙소</b>${Array.from({length:31},(_,index)=>`<span>${index+1}</span>`).join('')}</div>`;
+  const rows=properties.map(property=>{const stays=portfolioStays[property.id]||[];return `<div class="portfolio-row"><button type="button" class="portfolio-name" data-portfolio-property="${escapeHtml(property.id)}"><i style="background:${property.color}"></i><span><b>${escapeHtml(property.name)}</b><small>${stays.reduce((sum,stay)=>sum+stay.end-stay.start,0)}박 예약</small></span></button>${Array.from({length:31},()=>'<i class="portfolio-cell"></i>').join('')}${stays.map(stay=>`<button type="button" class="portfolio-stay" style="--stay-color:${property.color};grid-column:${stay.start+1}/${stay.end+1}" title="${stay.start}일~${stay.end}일 · ${stay.guests}인"><b>${stay.guests}인</b><span>${stay.end-stay.start}박</span></button>`).join('')}</div>`}).join('');
+  root.innerHTML=header+rows;
+  root.querySelectorAll('[data-portfolio-property]').forEach(button=>button.addEventListener('click',()=>{activePropertyId=button.dataset.portfolioProperty;localStorage.setItem('andwith-active-property',activePropertyId);renderPropertyMenu();toast(`${activeProperty().name} 개별 달력을 열었습니다.`)}))
+}
+renderPropertyMenu();
 
 const toast=message=>{const el=document.getElementById('toast');el.textContent=message;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2400)};
 document.querySelectorAll('.rec-actions button').forEach(b=>b.addEventListener('click',()=>{if(!b.dataset.open)toast(`“${b.textContent.trim()}”으로 기록했습니다.`)}));
