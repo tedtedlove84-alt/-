@@ -5,6 +5,20 @@ const reservations=[
 const blocked={5:'보수·휴식',18:'보수·휴식'};
 const cleaners={3:'미배정',4:'난희',5:'난희',10:'외주',13:'외주',18:'외주',24:'외주',26:'외주',30:'외주'};
 const views=[...document.querySelectorAll('.view')];
+let properties=JSON.parse(localStorage.getItem('andwith-properties')||'null')||[{id:'and',name:'앤드',area:'서울 마포구 망원동',color:'#315f50'}];
+let activePropertyId=localStorage.getItem('andwith-active-property')||'and';
+const activeProperty=()=>properties.find(property=>property.id===activePropertyId)||properties[0];
+const escapeHtml=value=>String(value).replace(/[&<>'"]/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
+
+function renderPropertyMenu(){
+  const property=activeProperty();
+  document.querySelectorAll('[data-property-name]').forEach(element=>element.textContent=property.name);
+  document.documentElement.style.setProperty('--property-color',property.color);
+  const menu=document.getElementById('propertyMenu');
+  menu.innerHTML=properties.map(item=>`<button type="button" data-property-id="${escapeHtml(item.id)}"><i style="background:${item.color}"></i><span><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.area)}</small></span>${item.id===property.id?'<em>선택됨</em>':''}</button>`).join('')+'<button type="button" class="add-property">＋ 새 숙소 등록</button>';
+  menu.querySelectorAll('[data-property-id]').forEach(button=>button.addEventListener('click',()=>{activePropertyId=button.dataset.propertyId;localStorage.setItem('andwith-active-property',activePropertyId);menu.hidden=true;renderPropertyMenu();toast(`${activeProperty().name} 숙소로 전환했습니다.`)}));
+  menu.querySelector('.add-property').addEventListener('click',()=>{menu.hidden=true;document.getElementById('propertyDialog').showModal()})
+}
 
 function showView(id){
   views.forEach(v=>v.classList.toggle('active',v.id===id));
@@ -14,6 +28,10 @@ function showView(id){
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
 document.querySelectorAll('[data-view-link]').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.viewLink)));
 document.querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',()=>document.getElementById(b.dataset.open).showModal()));
+document.getElementById('propertyButton').addEventListener('click',event=>{event.stopPropagation();const menu=document.getElementById('propertyMenu');menu.hidden=!menu.hidden});
+document.addEventListener('click',event=>{if(!event.target.closest('.property-switch'))document.getElementById('propertyMenu').hidden=true});
+document.getElementById('propertyForm').addEventListener('submit',event=>{event.preventDefault();const data=new FormData(event.currentTarget),property={id:`property-${Date.now()}`,name:data.get('name'),area:data.get('area'),color:data.get('color')};properties.push(property);activePropertyId=property.id;localStorage.setItem('andwith-properties',JSON.stringify(properties));localStorage.setItem('andwith-active-property',activePropertyId);renderPropertyMenu();event.currentTarget.reset();document.getElementById('propertyDialog').close();toast(`${property.name} 숙소를 등록했습니다.`)});
+renderPropertyMenu();
 
 function reservationOn(day){return reservations.find(r=>day>=r.start&&day<r.end)}
 function renderMonth(){
@@ -78,7 +96,7 @@ let extraExpenses=JSON.parse(localStorage.getItem('andwith-extra-expenses')||'[]
 const won=value=>`${Math.round(value).toLocaleString('ko-KR')}원`;
 function renderExpenses(){
   const total=extraExpenses.reduce((sum,item)=>sum+Number(item.amount||0),0);
-  document.getElementById('extraExpenseRows').innerHTML=extraExpenses.map((item,index)=>`<div class="minus custom-expense"><span>${item.name}<small>${item.note||'추가 입력'}</small></span><b>−${won(item.amount)}</b><button type="button" data-remove-expense="${index}" aria-label="${item.name} 삭제">×</button></div>`).join('');
+  document.getElementById('extraExpenseRows').innerHTML=extraExpenses.map((item,index)=>`<div class="minus custom-expense"><span>${escapeHtml(item.name)}<small>${escapeHtml(item.note||'추가 입력')}</small></span><b>−${won(item.amount)}</b><button type="button" data-remove-expense="${index}" aria-label="${escapeHtml(item.name)} 삭제">×</button></div>`).join('');
   const profit=baseProfit-total;
   document.getElementById('profitTotal').textContent=won(profit);
   document.getElementById('profitMetric').innerHTML=`${Math.round(profit).toLocaleString('ko-KR')}<small>원</small>`;
@@ -97,7 +115,7 @@ function renderViewsChart(){
   const svg=document.getElementById('viewsChart'),max=280,width=1000,height=210,step=width/(dailyViews.length-1);
   const points=dailyViews.map((value,index)=>({x:index*step,y:height-(value/max*height),value,day:index+1}));
   const line=points.map(point=>`${point.x},${point.y}`).join(' '),area=`0,${height} ${line} ${width},${height}`;
-  svg.innerHTML=`<defs><linearGradient id="viewArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4b4b4b" stop-opacity=".22"/><stop offset="1" stop-color="#4b4b4b" stop-opacity=".02"/></linearGradient></defs><polygon points="${area}" fill="url(#viewArea)"/><polyline points="${line}" fill="none" stroke="#3f3f3f" stroke-width="3" vector-effect="non-scaling-stroke"/>${points.map(point=>`<circle tabindex="0" role="button" aria-label="7월 ${point.day}일 조회 ${point.value}회" data-chart-day="${point.day}" cx="${point.x}" cy="${point.y}" r="6"><title>7월 ${point.day}일 · 조회 ${point.value}회</title></circle>`).join('')}`;
+  svg.innerHTML=`<defs><linearGradient id="viewArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff385c" stop-opacity=".28"/><stop offset="1" stop-color="#ff385c" stop-opacity=".02"/></linearGradient></defs><polygon points="${area}" fill="url(#viewArea)"/><polyline points="${line}" fill="none" stroke="#ff385c" stroke-width="3" vector-effect="non-scaling-stroke"/>${points.map(point=>`<circle tabindex="0" role="button" aria-label="7월 ${point.day}일 조회 ${point.value}회" data-chart-day="${point.day}" cx="${point.x}" cy="${point.y}" r="6"><title>7월 ${point.day}일 · 조회 ${point.value}회</title></circle>`).join('')}`;
   svg.querySelectorAll('[data-chart-day]').forEach(point=>{const select=()=>showChartDay(Number(point.dataset.chartDay));point.addEventListener('click',select);point.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' ')select()})});
   showChartDay(26)
 }
