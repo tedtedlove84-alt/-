@@ -1,0 +1,15 @@
+{
+  "name": "ANDWITH Host OS",
+  "short_name": "ANDWITH",
+  "description": "난희 전용 숙소 운영 의사결정·통제 앱",
+  "lang": "ko",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#ff385c",
+  "icons": [
+    {"src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}
